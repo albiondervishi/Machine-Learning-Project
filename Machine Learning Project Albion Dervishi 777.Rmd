@@ -1,0 +1,128 @@
+---
+title: "Machine Learning Project"
+author: "Albion Dervishi"
+date: "June 21, 2015"
+output: html_document
+---
+Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. This human activity recognition research has traditionally focused on discriminating between different activities, i.e. to predict "which" activity was performed at a specific point in time (like with the Daily Living Activities dataset above).
+In this work  we first define quality of execution of Correct execution,  Automatic and Robust detection of execution mistakes, and how to provide feedback on the quality of execution to the user. 
+
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions:
+• Class A: exactly according to the specification
+• Class B: throwing the elbows to the front
+•	Class C: lifting the dumbbell only halfway
+•	Class D: lowering the dumbbell only halfway
+•	Class E: throwing the hips to the front
+
+Goal
+
+The goal of your project is to predict the manner in which they did the exercise. Also,we have created a report that describe how we built our model, how we used cross validation.
+
+Libraries
+The R libraries utilized for this analysis includes:
+
+```{r, warning=FALSE, message=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(rattle)
+library(randomForest)
+library(gridExtra)
+library(dplyr)
+library(lattice)
+library(ggplot2)
+library(cluster)
+```
+```
+Data Loading
+
+The data for this project originated from the following source: http://groupware.les.inf.puc-rio.br/har. 
+
+Initial loading and reading of the data is as follows:
+
+```{r}
+URLtraining <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+URLtesting <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(url = URLtraining, destfile = "training.csv",method = "curl")
+download.file(url = URLtesting, destfile = "testing.csv",method = "curl")
+Training <- read.csv("training.csv",header = TRUE,  stringsAsFactors=FALSE, na.strings=c("NA","#DIV/0!",""))
+Testing <- read.csv("testing.csv",header = TRUE,  stringsAsFactors=FALSE, na.strings=c("NA","#DIV/0!",""))
+```
+Data Pre-processing
+
+Next, I perform some data pre-processing for data reduction , substitution of the (NA)  with (0 value), and validation of the near zero variance predictor  for our project prediction. 
+
+```{r}
+Training <- Training[,(colSums(is.na(Training)) == 0)]
+Testing <-  Testing[,(colSums(is.na(Testing)) == 0)]
+Training <- Training[,-c(1:7)]
+Testing <-  Testing[,-c(1:7)]
+nzv <- nearZeroVar(Training, saveMetrics=TRUE)
+nzv<- nearZeroVar(Testing,saveMetrics=TRUE)
+```
+Slicing the data:
+
+ We can cross validation/data splitting oth the "Training" data into a new validated training data set (70%) and a validation "testing" data set (30%).  We will use the validation training data set to conduct cross validation in future steps.
+```{r}
+set.seed(42)
+inTrain <- createDataPartition(y=Training$classe,  p = 0.7, list = FALSE)
+training <- Training[inTrain,]
+testing <- Training[-inTrain,]
+dim(training)
+dim(testing)
+```
+Locating Relevant Features
+
+This graphic leaves us to distinguish the class pattern of the exercise in general data set
+```{r}
+qplot(classe, colour=classe, data=training, geom="density")
+```
+Data Modeling: rpart model
+
+We used rpart model to construct trees for activity recognition because it automatically selects important variables and is robust to correlated covariates & outliers in general.
+```{r}
+set.seed(42)
+treeFit <- rpart(classe ~ ., method = "class", data = training)
+
+treePredict <- predict(treeFit, training, type = "class")
+confusionmatrix_rp<-confusionMatrix(treePredict, training$classe)
+confusionmatrix_rp
+```
+
+Prediction with Decision Trees
+```{r}
+fancyRpartPlot(treeFit, main = "Decision Tree", 
+               sub = "Rpart Decision Tree To Predict Classe", cex=0.3, cex.main = 2)
+```
+Data Modeling: Random Forest Model
+
+As the rpart model was generally inaccurate and the outcome variable appears to have more gradations in variable, a random forest model was tested to see if  this model fit more suitably in these project
+```{r}
+set.seed(40) 
+
+inTrain <- createDataPartition(Training$classe, p=0.70, list=FALSE)
+trainData <- Training[inTrain, ]
+testData <- Training[-inTrain, ]
+fit <- randomForest(as.factor(classe) ~ . , data=trainData, importance=TRUE, proximity=TRUE )
+prediction_rf <- predict(fit , trainData, type = "class")
+confusionmatrix_rf <- confusionMatrix(prediction_rf, trainData$classe)
+confusionmatrix_rf
+```
+
+The variable importance plot shown below illustrates a model in survival analysis- prediction which of the variables have significant importance.
+```{r}
+varImpPlot(fit, main="Random Forest Variable Importance")
+```
+
+The variable importance plot shown below illustrates a model in survival analysis- prediction error curves
+```{r}
+plot(fit)
+```
+
+Summary
+
+Random Forest was a superior model for prediction of exercise quality compared to rpart. The Random Forest had over 99%accuracy and fitted well to other subsamples of the data. 
+
+In general, it is important in evaluation of the devices for tracking movements are affected in gathering data, predictable errors, and quality of measurements.
+This project give us idea about qualty of exercise that can be collected and analysed  from this type of device.
